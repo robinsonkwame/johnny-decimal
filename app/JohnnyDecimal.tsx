@@ -5,14 +5,15 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import ReactMarkdown from 'react-markdown';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const JohnnyDecimalManager = () => {
   const [categories, setCategories] = useState([{ range: '10-19', name: '', areas: [] }]);
-  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [activeTab, setActiveTab] = useState('category');
+  const [selectedCategory, setSelectedCategory] = useState(0);
   const [selectedArea, setSelectedArea] = useState(null);
   const [selectedID, setSelectedID] = useState(null);
   const [notes, setNotes] = useState({});
-  const [columnWidths, setColumnWidths] = useState(['33.33%', '33.33%', '33.33%']);
 
   const addCategory = () => {
     if (categories.length < 9) {
@@ -60,166 +61,136 @@ const JohnnyDecimalManager = () => {
   };
 
   const updateNotes = (categoryIndex, areaIndex, idIndex, content) => {
-    const key = `${categoryIndex}-${areaIndex}-${idIndex}`;
-    setNotes({ ...notes, [key]: content });
+    const key = `${categories[categoryIndex].areas[areaIndex].number}.${categories[categoryIndex].areas[areaIndex].ids[idIndex].number.toString().padStart(2, '0')}`;
+    setNotes(prevNotes => ({ ...prevNotes, [key]: content }));
   };
 
-  const startResize = (index) => (e) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidths = [...columnWidths];
+  const resetAll = () => {
+    setCategories([{ range: '10-19', name: '', areas: [] }]);
+    setActiveTab('category');
+    setSelectedCategory(0);
+    setSelectedArea(null);
+    setSelectedID(null);
+    setNotes({});
+  };
 
-    const doDrag = (e) => {
-      const currentX = e.clientX;
-      const diffX = currentX - startX;
-      const newWidths = [...startWidths];
-      const totalWidth = 100; // Total width in percentage
-      const minWidth = 10; // Minimum width in percentage
-
-      // Calculate new width for the column being resized
-      let newWidth = Math.max(parseFloat(startWidths[index]) + (diffX / window.innerWidth) * 100, minWidth);
-      newWidths[index] = `${newWidth}%`;
-
-      // Adjust the next column's width
-      if (index < newWidths.length - 1) {
-        const nextColumnWidth = Math.max(parseFloat(startWidths[index + 1]) - (diffX / window.innerWidth) * 100, minWidth);
-        newWidths[index + 1] = `${nextColumnWidth}%`;
-      }
-
-      // Ensure the total width remains 100%
-      const sumWidth = newWidths.reduce((sum, width) => sum + parseFloat(width), 0);
-      if (sumWidth > 100) {
-        const excess = sumWidth - 100;
-        newWidths[newWidths.length - 1] = `${parseFloat(newWidths[newWidths.length - 1]) - excess}%`;
-      }
-
-      setColumnWidths(newWidths);
-    };
-
-    const stopDrag = () => {
-      document.removeEventListener('mousemove', doDrag);
-      document.removeEventListener('mouseup', stopDrag);
-    };
-
-    document.addEventListener('mousemove', doDrag);
-    document.addEventListener('mouseup', stopDrag);
+  const handleCategoryClick = (categoryIndex) => {
+    setSelectedCategory(categoryIndex);
+    setActiveTab('area');
+    setSelectedArea(null);
+    setSelectedID(null);
   };
 
   return (
-    <div className="p-4">
-      <div className="grid gap-4" style={{ gridTemplateColumns: columnWidths.join(' ') }}>
-        <div className="font-bold p-2 bg-gray-100 relative">
-          Category
-          <div 
-            className="absolute top-0 right-0 w-1 h-full bg-gray-300 hover:bg-gray-400 cursor-col-resize"
-            onMouseDown={startResize(0)}
-          ></div>
-        </div>
-        <div className="font-bold p-2 bg-gray-100 relative">
-          Area
-          <div 
-            className="absolute top-0 right-0 w-1 h-full bg-gray-300 hover:bg-gray-400 cursor-col-resize"
-            onMouseDown={startResize(1)}
-          ></div>
-        </div>
-        <div className="font-bold p-2 bg-gray-100">ID</div>
-
-        {categories.map((category, categoryIndex) => (
-          <React.Fragment key={categoryIndex}>
-            <div className="border p-2">
-              <div>{category.range} {category.name}</div>
-              <Input
-                value={category.name}
-                onChange={(e) => updateCategory(categoryIndex, e.target.value)}
-                placeholder="Enter category name"
-                className="w-full mb-2"
-              />
-              <Button onClick={() => addArea(categoryIndex)} disabled={category.areas.length >= 10}>
-                Add Area
-              </Button>
-            </div>
-            <div className="border p-2">
-              {category.areas.map((area, areaIndex) => (
-                <div key={areaIndex} className="mb-2">
+    <div className="p-4 h-screen flex flex-col">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-grow flex flex-col">
+        <TabsList>
+          <TabsTrigger value="category">Category</TabsTrigger>
+          <TabsTrigger value="area" disabled={selectedCategory === null}>Area</TabsTrigger>
+          <TabsTrigger value="id" disabled={selectedArea === null}>ID</TabsTrigger>
+        </TabsList>
+        <TabsContent value="category" className="flex-grow overflow-y-auto">
+          <div className="flex flex-wrap gap-2">
+            {categories.map((category, categoryIndex) => (
+              <div 
+                key={categoryIndex} 
+                className={`border p-2 mb-2 ${selectedCategory === categoryIndex ? 'bg-blue-100' : ''} cursor-pointer flex-grow`}
+                onClick={() => handleCategoryClick(categoryIndex)}
+              >
+                <div className="font-bold mb-2">{category.range} {category.name}</div>
+                <Input
+                  value={category.name}
+                  onChange={(e) => updateCategory(categoryIndex, e.target.value)}
+                  placeholder="Enter category name"
+                  className="w-full mb-2"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <Button onClick={(e) => {
+                  e.stopPropagation();
+                  addArea(categoryIndex);
+                  setSelectedCategory(categoryIndex);
+                  setActiveTab('area');
+                }} disabled={category.areas.length >= 10}>
+                  Add Area
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button onClick={addCategory} disabled={categories.length >= 9} className="mt-4">
+            Add Category
+          </Button>
+        </TabsContent>
+        <TabsContent value="area" className="flex-grow overflow-y-auto">
+          {selectedCategory !== null && (
+            <div className="flex flex-wrap gap-2">
+              {categories[selectedCategory].areas.map((area, areaIndex) => (
+                <div key={areaIndex} className={`border p-2 mb-2 ${selectedArea === areaIndex ? 'bg-blue-100' : ''} flex-grow`}>
                   <Button onClick={() => {
-                    setSelectedCategory(categoryIndex);
                     setSelectedArea(areaIndex);
-                  }} className="mb-1">
+                    setActiveTab('id');
+                  }} className="mb-1 w-full">
                     {area.number} {area.name}
                   </Button>
                   <Input
                     value={area.name}
-                    onChange={(e) => updateArea(categoryIndex, areaIndex, e.target.value)}
+                    onChange={(e) => updateArea(selectedCategory, areaIndex, e.target.value)}
                     placeholder="Enter area name"
                     className="w-full"
                   />
                 </div>
               ))}
             </div>
-            <div className="border p-2">
-              {selectedCategory === categoryIndex && selectedArea !== null && (
-                <>
-                  {category.areas[selectedArea].ids.map((id, idIndex) => (
-                    <div key={idIndex} className="mb-2">
-                      <Button onClick={() => setSelectedID(idIndex)} className="mb-1">
-                        {category.areas[selectedArea].number}.{id.number.toString().padStart(2, '0')} {id.name}
-                      </Button>
-                      <Input
-                        value={id.name}
-                        onChange={(e) => updateID(categoryIndex, selectedArea, idIndex, e.target.value)}
-                        placeholder="Enter ID name"
-                        className="w-full"
-                      />
-                    </div>
-                  ))}
-                  <Button onClick={() => addID(categoryIndex, selectedArea)} 
-                          disabled={category.areas[selectedArea].ids.length >= 99}>
-                    Add ID
+          )}
+        </TabsContent>
+        <TabsContent value="id" className="flex-grow overflow-y-auto">
+          {selectedCategory !== null && selectedArea !== null && (
+            <>
+              {categories[selectedCategory].areas[selectedArea].ids.map((id, idIndex) => (
+                <div key={idIndex} className={`border p-2 mb-2 ${selectedID === idIndex ? 'bg-blue-100' : ''}`}>
+                  <Button onClick={() => setSelectedID(idIndex)} className="mb-1">
+                    {categories[selectedCategory].areas[selectedArea].number}.{id.number.toString().padStart(2, '0')} {id.name}
                   </Button>
-                </>
-              )}
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
+                  <Input
+                    value={id.name}
+                    onChange={(e) => updateID(selectedCategory, selectedArea, idIndex, e.target.value)}
+                    placeholder="Enter ID name"
+                    className="w-full mb-2"
+                  />
+                  <textarea
+                    value={notes[`${categories[selectedCategory].areas[selectedArea].number}.${id.number.toString().padStart(2, '0')}`] || ''}
+                    onChange={(e) => updateNotes(selectedCategory, selectedArea, idIndex, e.target.value)}
+                    placeholder="Enter notes"
+                    className="w-full h-32 p-2 border rounded"
+                  />
+                  <ReactMarkdown className="mt-2 p-2 bg-gray-100 rounded">
+                    {notes[`${categories[selectedCategory].areas[selectedArea].number}.${id.number.toString().padStart(2, '0')}`] || ''}
+                  </ReactMarkdown>
+                </div>
+              ))}
+              <Button onClick={() => addID(selectedCategory, selectedArea)} disabled={categories[selectedCategory].areas[selectedArea].ids.length >= 100}>
+                Add ID
+              </Button>
+            </>
+          )}
+        </TabsContent>
+      </Tabs>
 
-      <Button onClick={addCategory} disabled={categories.length >= 9} className="mt-4">
-        Add Category
-      </Button>
-
-      {selectedCategory !== null && selectedArea !== null && selectedID !== null && (
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button className="mt-4">Edit Notes</Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Edit Notes</AlertDialogTitle>
-              <AlertDialogDescription>
-                Enter your notes in Markdown format:
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <Input
-              value={notes[`${selectedCategory}-${selectedArea}-${selectedID}`] || ''}
-              onChange={(e) => updateNotes(selectedCategory, selectedArea, selectedID, e.target.value)}
-              placeholder="Enter notes (Markdown supported)"
-              className="mt-2"
-            />
-            <AlertDialogFooter>
-              <AlertDialogAction>Save</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      )}
-
-      {selectedCategory !== null && selectedArea !== null && selectedID !== null && (
-        <div className="mt-4">
-          <h3 className="text-lg font-semibold">Notes:</h3>
-          <ReactMarkdown>
-            {notes[`${selectedCategory}-${selectedArea}-${selectedID}`] || ''}
-          </ReactMarkdown>
-        </div>
-      )}
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button className="mt-4">Reset</Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete your Johnny.Decimal structure and notes.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={resetAll}>Continue</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
