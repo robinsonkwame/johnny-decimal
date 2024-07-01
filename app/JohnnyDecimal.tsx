@@ -1,177 +1,261 @@
-'use client';
-
-import React, { useState, useRef } from 'react';
+import React, { useReducer, useEffect } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import ReactMarkdown from 'react-markdown';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
-const JohnnyDecimalManager = () => {
-  const [categories, setCategories] = useState([{ range: '10-19', name: '', areas: [] }]);
-  const [activeTab, setActiveTab] = useState('category');
-  const [selectedCategory, setSelectedCategory] = useState(0);
-  const [selectedArea, setSelectedArea] = useState(null);
-  const [selectedID, setSelectedID] = useState(null);
-  const [notes, setNotes] = useState({});
+type ID = { number: number; name: string };
+type Area = { number: number; name: string; ids: ID[] };
+type Category = { range: string; name: string; areas: Area[] };
 
-  const addCategory = () => {
-    if (categories.length < 9) {
-      const newRange = `${categories.length * 10 + 10}-${categories.length * 10 + 19}`;
-      setCategories([...categories, { range: newRange, name: '', areas: [] }]);
+type State = {
+  categories: Category[];
+  selectedCategory: number | null;
+  selectedArea: number | null;
+  selectedID: number | null;
+  activeTab: 'category' | 'area' | 'id';
+};
+
+type Action =
+  | { type: 'ADD_CATEGORY' }
+  | { type: 'ADD_AREA'; categoryIndex: number }
+  | { type: 'ADD_ID'; categoryIndex: number; areaIndex: number }
+  | { type: 'SELECT_CATEGORY'; index: number }
+  | { type: 'SELECT_AREA'; categoryIndex: number; index: number }
+  | { type: 'SELECT_ID'; categoryIndex: number; areaIndex: number; index: number }
+  | { type: 'UPDATE_CATEGORY'; index: number; name: string }
+  | { type: 'UPDATE_AREA'; categoryIndex: number; areaIndex: number; name: string }
+  | { type: 'UPDATE_ID'; categoryIndex: number; areaIndex: number; idIndex: number; name: string }
+  | { type: 'RESET' }
+  | { type: 'SET_ACTIVE_TAB'; tab: 'category' | 'area' | 'id' };
+
+const initialState: State = {
+  categories: [{ range: '00-09', name: '', areas: [{ number: 0, name: '', ids: [] }] }],
+  selectedCategory: 0,
+  selectedArea: 0,
+  selectedID: null,
+  activeTab: 'category',
+};
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'ADD_CATEGORY':
+      if (state.categories.length >= 10) {
+        console.log("Maximum categories reached");
+        return state;
+      }
+      const newCategoryIndex = state.categories.length;
+      const newRange = `${newCategoryIndex}0-${newCategoryIndex}9`;
+      return {
+        ...state,
+        categories: [...state.categories, { range: newRange, name: '', areas: [{ number: newCategoryIndex * 10, name: '', ids: [] }] }],
+        selectedCategory: newCategoryIndex,
+        selectedArea: 0,
+        selectedID: null,
+        activeTab: 'category'
+      };
+
+    case 'ADD_AREA':
+      if (state.categories[action.categoryIndex].areas.length >= 10) {
+        console.log("Maximum areas reached for this category");
+        return state;
+      }
+      const newAreaNumber = state.categories[action.categoryIndex].areas.length + action.categoryIndex * 10;
+      return {
+        ...state,
+        categories: state.categories.map((category, index) =>
+          index === action.categoryIndex
+            ? { ...category, areas: [...category.areas, { number: newAreaNumber, name: '', ids: [] }] }
+            : category
+        ),
+        selectedArea: state.categories[action.categoryIndex].areas.length,
+        selectedID: null,
+        activeTab: 'area'
+      };
+
+    case 'ADD_ID':
+      if (state.categories[action.categoryIndex].areas[action.areaIndex].ids.length >= 99) {
+        console.log("Maximum IDs reached for this area");
+        return state;
+      }
+      const newIDNumber = state.categories[action.categoryIndex].areas[action.areaIndex].ids.length + 1;
+      return {
+        ...state,
+        categories: state.categories.map((category, cIndex) =>
+          cIndex === action.categoryIndex
+            ? {
+                ...category,
+                areas: category.areas.map((area, aIndex) =>
+                  aIndex === action.areaIndex
+                    ? { ...area, ids: [...area.ids, { number: newIDNumber, name: '' }] }
+                    : area
+                )
+              }
+            : category
+        ),
+        selectedID: newIDNumber - 1,
+        activeTab: 'id'
+      };
+
+    case 'SELECT_CATEGORY':
+      return {
+        ...state,
+        selectedCategory: action.index,
+        selectedArea: 0,
+        selectedID: null,
+        activeTab: 'category'
+      };
+
+    case 'SELECT_AREA':
+      return {
+        ...state,
+        selectedCategory: action.categoryIndex,
+        selectedArea: action.index,
+        selectedID: null,
+        activeTab: 'area'
+      };
+
+    case 'SELECT_ID':
+      return {
+        ...state,
+        selectedCategory: action.categoryIndex,
+        selectedArea: action.areaIndex,
+        selectedID: action.index,
+        activeTab: 'id'
+      };
+
+    case 'UPDATE_CATEGORY':
+      return {
+        ...state,
+        categories: state.categories.map((category, index) =>
+          index === action.index ? { ...category, name: action.name } : category
+        )
+      };
+
+    case 'UPDATE_AREA':
+      return {
+        ...state,
+        categories: state.categories.map((category, cIndex) =>
+          cIndex === action.categoryIndex
+            ? {
+                ...category,
+                areas: category.areas.map((area, aIndex) =>
+                  aIndex === action.areaIndex ? { ...area, name: action.name } : area
+                )
+              }
+            : category
+        )
+      };
+
+    case 'UPDATE_ID':
+      return {
+        ...state,
+        categories: state.categories.map((category, cIndex) =>
+          cIndex === action.categoryIndex
+            ? {
+                ...category,
+                areas: category.areas.map((area, aIndex) =>
+                  aIndex === action.areaIndex
+                    ? {
+                        ...area,
+                        ids: area.ids.map((id, iIndex) =>
+                          iIndex === action.idIndex ? { ...id, name: action.name } : id
+                        )
+                      }
+                    : area
+                )
+              }
+            : category
+        )
+      };
+
+    case 'RESET':
+      return initialState;
+
+    case 'SET_ACTIVE_TAB':
+      return { ...state, activeTab: action.tab };
+
+    default:
+      return state;
+  }
+}
+
+interface JohnnyDecimalManagerProps {
+  onIDSelect: (id: string) => void;
+  activeJohnnyDecimalID: { category: number, area: number, id: number } | null;
+}
+
+const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect, activeJohnnyDecimalID }) => {
+  const [state, dispatch] = useReducer(reducer, initialState);
+
+  useEffect(() => {
+    if (activeJohnnyDecimalID) {
+      dispatch({ type: 'SELECT_ID', categoryIndex: activeJohnnyDecimalID.category, areaIndex: activeJohnnyDecimalID.area, index: activeJohnnyDecimalID.id });
     }
-  };
+  }, [activeJohnnyDecimalID]);
 
-  const updateCategory = (index, name) => {
-    const newCategories = [...categories];
-    newCategories[index].name = name;
-    setCategories(newCategories);
-  };
-
-  const addArea = (categoryIndex) => {
-    const newCategories = [...categories];
-    const categoryStart = parseInt(categories[categoryIndex].range.split('-')[0]);
-    const newAreaNumber = categoryStart + newCategories[categoryIndex].areas.length;
-    if (newAreaNumber <= categoryStart + 9) {
-      newCategories[categoryIndex].areas.push({ number: newAreaNumber, name: '', ids: [] });
-      setCategories(newCategories);
-    }
-  };
-
-  const updateArea = (categoryIndex, areaIndex, name) => {
-    const newCategories = [...categories];
-    newCategories[categoryIndex].areas[areaIndex].name = name;
-    setCategories(newCategories);
-  };
-
-  const addID = (categoryIndex, areaIndex) => {
-    const newCategories = [...categories];
-    const newID = {
-      number: newCategories[categoryIndex].areas[areaIndex].ids.length + 1,
-      name: ''
-    };
-    newCategories[categoryIndex].areas[areaIndex].ids.push(newID);
-    setCategories(newCategories);
-  };
-
-  const updateID = (categoryIndex, areaIndex, idIndex, name) => {
-    const newCategories = [...categories];
-    newCategories[categoryIndex].areas[areaIndex].ids[idIndex].name = name;
-    setCategories(newCategories);
-  };
-
-  const updateNotes = (categoryIndex, areaIndex, idIndex, content) => {
-    const key = `${categories[categoryIndex].areas[areaIndex].number}.${categories[categoryIndex].areas[areaIndex].ids[idIndex].number.toString().padStart(2, '0')}`;
-    setNotes(prevNotes => ({ ...prevNotes, [key]: content }));
-  };
-
-  const resetAll = () => {
-    setCategories([{ range: '10-19', name: '', areas: [] }]);
-    setActiveTab('category');
-    setSelectedCategory(0);
-    setSelectedArea(null);
-    setSelectedID(null);
-    setNotes({});
-  };
-
-  const handleCategoryClick = (categoryIndex) => {
-    setSelectedCategory(categoryIndex);
-    setActiveTab('area');
-    setSelectedArea(null);
-    setSelectedID(null);
+  const handleIDClick = (categoryIndex: number, areaIndex: number, idIndex: number) => {
+    dispatch({ type: 'SELECT_ID', categoryIndex, areaIndex, index: idIndex });
+    const area = state.categories[categoryIndex].areas[areaIndex];
+    const id = `${area.number}.${area.ids[idIndex].number.toString().padStart(2, '0')}`;
+    onIDSelect(id);
   };
 
   return (
     <div className="p-4 h-screen flex flex-col">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-grow flex flex-col">
+      <Tabs value={state.activeTab} onValueChange={(value) => dispatch({ type: 'SET_ACTIVE_TAB', tab: value as 'category' | 'area' | 'id' })} className="flex-grow flex flex-col">
         <TabsList>
           <TabsTrigger value="category">Category</TabsTrigger>
-          <TabsTrigger value="area" disabled={selectedCategory === null}>Area</TabsTrigger>
-          <TabsTrigger value="id" disabled={selectedArea === null}>ID</TabsTrigger>
+          <TabsTrigger value="area" disabled={state.selectedCategory === null}>Area</TabsTrigger>
+          <TabsTrigger value="id" disabled={state.selectedArea === null}>ID</TabsTrigger>
         </TabsList>
+
         <TabsContent value="category" className="flex-grow overflow-y-auto">
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category, categoryIndex) => (
-              <div 
-                key={categoryIndex} 
-                className={`border p-2 mb-2 ${selectedCategory === categoryIndex ? 'bg-blue-100' : ''} cursor-pointer flex-grow`}
-                onClick={() => handleCategoryClick(categoryIndex)}
-              >
-                <div className="font-bold mb-2">{category.range} {category.name}</div>
-                <Input
-                  value={category.name}
-                  onChange={(e) => updateCategory(categoryIndex, e.target.value)}
-                  placeholder="Enter category name"
-                  className="w-full mb-2"
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <Button onClick={(e) => {
-                  e.stopPropagation();
-                  addArea(categoryIndex);
-                  setSelectedCategory(categoryIndex);
-                  setActiveTab('area');
-                }} disabled={category.areas.length >= 10}>
-                  Add Area
-                </Button>
-              </div>
-            ))}
-          </div>
-          <Button onClick={addCategory} disabled={categories.length >= 9} className="mt-4">
-            Add Category
-          </Button>
-        </TabsContent>
-        <TabsContent value="area" className="flex-grow overflow-y-auto">
-          {selectedCategory !== null && (
-            <div className="flex flex-wrap gap-2">
-              {categories[selectedCategory].areas.map((area, areaIndex) => (
-                <div key={areaIndex} className={`border p-2 mb-2 ${selectedArea === areaIndex ? 'bg-blue-100' : ''} flex-grow`}>
-                  <Button onClick={() => {
-                    setSelectedArea(areaIndex);
-                    setActiveTab('id');
-                  }} className="mb-1 w-full">
-                    {area.number} {area.name}
-                  </Button>
-                  <Input
-                    value={area.name}
-                    onChange={(e) => updateArea(selectedCategory, areaIndex, e.target.value)}
-                    placeholder="Enter area name"
-                    className="w-full"
-                  />
-                </div>
-              ))}
+          {/* Render categories */}
+          {state.categories.map((category, index) => (
+            <div key={index} className={`border p-2 mb-2 ${state.selectedCategory === index ? 'bg-blue-100' : ''}`} onClick={() => dispatch({ type: 'SELECT_CATEGORY', index })}>
+              <div className="font-bold">{category.range} {category.name}</div>
+              <Input
+                value={category.name}
+                onChange={(e) => dispatch({ type: 'UPDATE_CATEGORY', index, name: e.target.value })}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Enter category name"
+              />
+              <Button onClick={() => dispatch({ type: 'ADD_AREA', categoryIndex: index })} disabled={category.areas.length >= 10}>Add Area</Button>
             </div>
-          )}
+          ))}
+          <Button onClick={() => dispatch({ type: 'ADD_CATEGORY' })} disabled={state.categories.length >= 10}>Add Category</Button>
         </TabsContent>
+
+        <TabsContent value="area" className="flex-grow overflow-y-auto">
+          {/* Render areas */}
+          {state.selectedCategory !== null && state.categories[state.selectedCategory].areas.map((area, index) => (
+            <div key={index} className={`border p-2 mb-2 ${state.selectedArea === index ? 'bg-blue-100' : ''}`} onClick={() => dispatch({ type: 'SELECT_AREA', categoryIndex: state.selectedCategory!, index })}>
+              <div className="font-bold">{area.number} {area.name}</div>
+              <Input
+                value={area.name}
+                onChange={(e) => dispatch({ type: 'UPDATE_AREA', categoryIndex: state.selectedCategory!, areaIndex: index, name: e.target.value })}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Enter area name"
+              />
+              <Button onClick={() => dispatch({ type: 'ADD_ID', categoryIndex: state.selectedCategory!, areaIndex: index })} disabled={area.ids.length >= 99}>Add ID</Button>
+            </div>
+          ))}
+        </TabsContent>
+
         <TabsContent value="id" className="flex-grow overflow-y-auto">
-          {selectedCategory !== null && selectedArea !== null && (
-            <>
-              {categories[selectedCategory].areas[selectedArea].ids.map((id, idIndex) => (
-                <div key={idIndex} className={`border p-2 mb-2 ${selectedID === idIndex ? 'bg-blue-100' : ''}`}>
-                  <Button onClick={() => setSelectedID(idIndex)} className="mb-1">
-                    {categories[selectedCategory].areas[selectedArea].number}.{id.number.toString().padStart(2, '0')} {id.name}
-                  </Button>
-                  <Input
-                    value={id.name}
-                    onChange={(e) => updateID(selectedCategory, selectedArea, idIndex, e.target.value)}
-                    placeholder="Enter ID name"
-                    className="w-full mb-2"
-                  />
-                  <textarea
-                    value={notes[`${categories[selectedCategory].areas[selectedArea].number}.${id.number.toString().padStart(2, '0')}`] || ''}
-                    onChange={(e) => updateNotes(selectedCategory, selectedArea, idIndex, e.target.value)}
-                    placeholder="Enter notes"
-                    className="w-full h-32 p-2 border rounded"
-                  />
-                  <ReactMarkdown className="mt-2 p-2 bg-gray-100 rounded">
-                    {notes[`${categories[selectedCategory].areas[selectedArea].number}.${id.number.toString().padStart(2, '0')}`] || ''}
-                  </ReactMarkdown>
-                </div>
-              ))}
-              <Button onClick={() => addID(selectedCategory, selectedArea)} disabled={categories[selectedCategory].areas[selectedArea].ids.length >= 100}>
-                Add ID
-              </Button>
-            </>
-          )}
+          {/* Render IDs */}
+          {state.selectedCategory !== null && state.selectedArea !== null && state.categories[state.selectedCategory].areas[state.selectedArea].ids.map((id, index) => (
+            <div key={index} className={`border p-2 mb-2 ${state.selectedID === index ? 'bg-blue-100' : ''}`} onClick={() => handleIDClick(state.selectedCategory!, state.selectedArea!, index)}>
+              <div className="font-bold">{state.categories[state.selectedCategory].areas[state.selectedArea].number}.{id.number.toString().padStart(2, '0')} {id.name}</div>
+              <Input
+                value={id.name}
+                onChange={(e) => dispatch({ type: 'UPDATE_ID', categoryIndex: state.selectedCategory!, areaIndex: state.selectedArea!, idIndex: index, name: e.target.value })}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="Enter ID name"
+              />
+            </div>
+          ))}
         </TabsContent>
       </Tabs>
 
@@ -183,11 +267,11 @@ const JohnnyDecimalManager = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete your Johnny.Decimal structure and notes.
+              This action cannot be undone. This will permanently delete your Johnny.Decimal structure.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogAction onClick={resetAll}>Continue</AlertDialogAction>
+            <AlertDialogAction onClick={() => dispatch({ type: 'RESET' })}>Continue</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
