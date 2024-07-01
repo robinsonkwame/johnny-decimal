@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
@@ -13,12 +13,98 @@ interface Section {
   selectedIDs: string[];
 }
 
+interface CombinedState {
+  paperSections: Section[];
+  johnnyDecimal: {
+    categories: Category[];
+    selectedCategory: number | null;
+    selectedArea: number | null;
+    selectedID: number | null;
+    activeTab: 'category' | 'area' | 'id';
+  };
+}
+
 const PaperSections: React.FC = () => {
   const [sections, setSections] = useState<Section[]>([
     { id: 1, name: 'Abstract', isChecked: false, selectedIDs: [] },
     { id: 2, name: 'Introduction', isChecked: false, selectedIDs: [] },
   ]);
   const [activeJohnnyDecimalID, setActiveJohnnyDecimalID] = useState<{ category: number, area: number, id: number } | null>(null);
+  const [johnnyDecimalState, setJohnnyDecimalState] = useState<any>(null);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Load combined state from localStorage on component mount
+  useEffect(() => {
+    const savedState = localStorage.getItem('combinedState');
+    if (savedState) {
+      const parsedState: CombinedState = JSON.parse(savedState);
+      setSections(parsedState.paperSections);
+    }
+  }, []);
+
+  // Save combined state to localStorage whenever sections change
+  useEffect(() => {
+    const johnnyDecimalState = localStorage.getItem('johnnyDecimalState');
+    const combinedState: CombinedState = {
+      paperSections: sections,
+      johnnyDecimal: johnnyDecimalState ? JSON.parse(johnnyDecimalState) : null,
+    };
+    localStorage.setItem('combinedState', JSON.stringify(combinedState));
+  }, [sections]);
+
+  const saveStateToFile = () => {
+    const johnnyDecimalState = localStorage.getItem('johnnyDecimalState');
+    const combinedState: CombinedState = {
+      paperSections: sections,
+      johnnyDecimal: johnnyDecimalState ? JSON.parse(johnnyDecimalState) : null,
+    };
+    const stateJson = JSON.stringify(combinedState, null, 2);
+    const blob = new Blob([stateJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'paper_sections_and_johnny_decimal_state.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const loadStateFromFile = async () => {
+    try {
+      const [fileHandle] = await window.showOpenFilePicker({
+        types: [
+          {
+            description: 'JSON Files',
+            accept: { 'application/json': ['.json'] },
+          },
+        ],
+      });
+      const file = await fileHandle.getFile();
+      const contents = await file.text();
+      const loadedState: CombinedState = JSON.parse(contents);
+      
+      console.log('Loaded state from file:', loadedState);
+
+      if (loadedState.paperSections) {
+        setSections(loadedState.paperSections);
+        console.log('Updated paper sections:', loadedState.paperSections);
+      }
+      if (loadedState.johnnyDecimal) {
+        setJohnnyDecimalState(loadedState.johnnyDecimal);
+        console.log('Updated Johnny Decimal state:', loadedState.johnnyDecimal);
+      }
+    } catch (error) {
+      console.error('Error loading file:', error);
+    }
+  };
+
+  const handleJohnnyDecimalStateChange = (newState: any) => {
+    console.log('Johnny Decimal state changed:', newState);
+    setJohnnyDecimalState(newState);
+  };
+
+  const refreshJohnnyDecimal = () => {
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   const addSection = () => {
     const newId = sections.length > 0 ? Math.max(...sections.map(s => s.id)) + 1 : 1;
@@ -90,7 +176,13 @@ const PaperSections: React.FC = () => {
 
         {/* Right column */}
         <div className="w-1/2 p-4">
-          <JohnnyDecimalManager onIDSelect={handleIDSelect} activeJohnnyDecimalID={activeJohnnyDecimalID} />
+          <JohnnyDecimalManager 
+            key={refreshTrigger}
+            onIDSelect={handleIDSelect} 
+            activeJohnnyDecimalID={activeJohnnyDecimalID} 
+            onStateChange={handleJohnnyDecimalStateChange}
+            initialState={johnnyDecimalState || null}
+          />
         </div>
       </div>
 
@@ -121,6 +213,12 @@ const PaperSections: React.FC = () => {
             ))}
           </div>
         ))}
+      </div>
+
+      <div className="mt-4 flex space-x-2">
+        <Button onClick={saveStateToFile}>Save to File</Button>
+        <Button onClick={loadStateFromFile}>Load from File</Button>
+        <Button onClick={refreshJohnnyDecimal}>Refresh Johnny Decimal</Button>
       </div>
     </div>
   );

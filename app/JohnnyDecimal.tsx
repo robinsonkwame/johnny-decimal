@@ -1,4 +1,4 @@
-import React, { useReducer, useEffect } from 'react';
+import React, { useReducer, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,17 +27,20 @@ type Action =
   | { type: 'UPDATE_AREA'; categoryIndex: number; areaIndex: number; name: string }
   | { type: 'UPDATE_ID'; categoryIndex: number; areaIndex: number; idIndex: number; name: string }
   | { type: 'RESET' }
-  | { type: 'SET_ACTIVE_TAB'; tab: 'category' | 'area' | 'id' };
+  | { type: 'SET_ACTIVE_TAB'; tab: 'category' | 'area' | 'id' }
+  | { type: 'LOAD_STATE'; state: State };
 
-const initialState: State = {
-  categories: [{ range: '00-09', name: '', areas: [{ number: 0, name: '', ids: [] }] }],
-  selectedCategory: 0,
-  selectedArea: 0,
+const defaultState: State = {
+  categories: [],
+  selectedCategory: null,
+  selectedArea: null,
   selectedID: null,
   activeTab: 'category',
 };
 
 function reducer(state: State, action: Action): State {
+  console.log('Reducer called with action:', action.type, action);
+  
   switch (action.type) {
     case 'ADD_CATEGORY':
       if (state.categories.length >= 10) {
@@ -170,10 +173,22 @@ function reducer(state: State, action: Action): State {
       };
 
     case 'RESET':
-      return initialState;
+      return defaultState;
 
     case 'SET_ACTIVE_TAB':
       return { ...state, activeTab: action.tab };
+
+    case 'LOAD_STATE':
+      console.log('LOAD_STATE action dispatched:', action.state);
+      const newState = {
+        ...action.state,
+        selectedCategory: action.state.selectedCategory ?? null,
+        selectedArea: action.state.selectedArea ?? null,
+        selectedID: action.state.selectedID ?? null,
+        activeTab: action.state.activeTab || 'category'
+      };
+      console.log('New state after LOAD_STATE:', newState);
+      return newState;
 
     default:
       return state;
@@ -183,12 +198,34 @@ function reducer(state: State, action: Action): State {
 interface JohnnyDecimalManagerProps {
   onIDSelect: (id: string) => void;
   activeJohnnyDecimalID: { category: number, area: number, id: number } | null;
+  onStateChange: (state: State) => void;
+  initialState: State | null;
 }
 
-const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect, activeJohnnyDecimalID }) => {
-  const [state, dispatch] = useReducer(reducer, initialState);
+const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect, activeJohnnyDecimalID, onStateChange, initialState }) => {
+  console.log('JohnnyDecimalManager rendered with initialState:', initialState);
+
+  const [state, dispatch] = useReducer(reducer, initialState || defaultState);
+  const isInitialized = useRef(false);
 
   useEffect(() => {
+    if (initialState && !isInitialized.current) {
+      console.log('Dispatching LOAD_STATE with:', initialState);
+      dispatch({ type: 'LOAD_STATE', state: initialState });
+      isInitialized.current = true;
+    }
+  }, [initialState]);
+
+  useEffect(() => {
+    console.log('Johnny Decimal state updated:', state);
+    if (isInitialized.current) {
+      localStorage.setItem('johnnyDecimalState', JSON.stringify(state));
+      onStateChange(state);
+    }
+  }, [state, onStateChange]);
+
+  useEffect(() => {
+    console.log('activeJohnnyDecimalID changed:', activeJohnnyDecimalID);
     if (activeJohnnyDecimalID) {
       dispatch({ type: 'SELECT_ID', categoryIndex: activeJohnnyDecimalID.category, areaIndex: activeJohnnyDecimalID.area, index: activeJohnnyDecimalID.id });
     }
@@ -202,7 +239,7 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
   };
 
   return (
-    <div className="p-4 h-screen flex flex-col">
+    <div className="p-4 h-screen flex flex-col" key={JSON.stringify(state)}>
       <Tabs value={state.activeTab} onValueChange={(value) => dispatch({ type: 'SET_ACTIVE_TAB', tab: value as 'category' | 'area' | 'id' })} className="flex-grow flex flex-col">
         <TabsList>
           <TabsTrigger value="category">Category</TabsTrigger>
@@ -259,6 +296,10 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
         </TabsContent>
       </Tabs>
 
+      <div className="mt-4 flex space-x-2">
+        <Button onClick={() => dispatch({ type: 'RESET' })}>Reset</Button>
+      </div>
+
       <AlertDialog>
         <AlertDialogTrigger asChild>
           <Button className="mt-4">Reset</Button>
@@ -275,6 +316,10 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <pre className="mt-4 p-2 bg-gray-100 text-xs">
+        {JSON.stringify(state, null, 2)}
+      </pre>
     </div>
   );
 };
