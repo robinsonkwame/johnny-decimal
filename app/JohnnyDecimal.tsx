@@ -1,8 +1,9 @@
-import React, { useReducer, useEffect, useRef } from 'react';
+import React, { useReducer, useEffect, useRef, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { ChevronRight } from 'lucide-react'; // Import the chevron icon
 
 type ID = { number: number; name: string };
 type Area = { number: number; name: string; ids: ID[] };
@@ -238,14 +239,95 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
     onIDSelect(id);
   };
 
+  const handleInputChange = useCallback((type: 'category' | 'area' | 'id', indexes: number[], value: string) => {
+    switch (type) {
+      case 'category':
+        dispatch({ type: 'UPDATE_CATEGORY', index: indexes[0], name: value });
+        break;
+      case 'area':
+        dispatch({ type: 'UPDATE_AREA', categoryIndex: indexes[0], areaIndex: indexes[1], name: value });
+        break;
+      case 'id':
+        dispatch({ type: 'UPDATE_ID', categoryIndex: indexes[0], areaIndex: indexes[1], idIndex: indexes[2], name: value });
+        break;
+    }
+  }, []);
+
+  const getTabLabel = (tab: 'category' | 'area' | 'id') => {
+    switch (tab) {
+      case 'category':
+        return 'Category';
+      case 'area':
+        if (state.selectedCategory !== null) {
+          const category = state.categories[state.selectedCategory];
+          return `Area (${category.range} ${category.name})`;
+        }
+        return 'Area';
+      case 'id':
+        if (state.selectedCategory !== null && state.selectedArea !== null) {
+          const category = state.categories[state.selectedCategory];
+          const area = category.areas[state.selectedArea];
+          return `ID (${category.range} ${category.name} > ${area.number} ${area.name})`;
+        }
+        return 'ID';
+    }
+  };
+
+  const renderBreadcrumb = () => {
+    const breadcrumbItems = [];
+
+    if (state.selectedCategory !== null) {
+      const category = state.categories[state.selectedCategory];
+      breadcrumbItems.push(
+        <div key="category" className="flex-1 min-w-0">
+          <span className="block truncate text-blue-600">
+            {category.range} {category.name}
+          </span>
+        </div>
+      );
+
+      if (state.selectedArea !== null) {
+        const area = category.areas[state.selectedArea];
+        breadcrumbItems.push(
+          <ChevronRight key="chevron1" className="flex-shrink-0 mx-2 h-4 w-4" />,
+          <div key="area" className="flex-1 min-w-0">
+            <span className="block truncate text-blue-600">
+              {area.number} {area.name}
+            </span>
+          </div>
+        );
+
+        if (state.selectedID !== null) {
+          const id = area.ids[state.selectedID];
+          breadcrumbItems.push(
+            <ChevronRight key="chevron2" className="flex-shrink-0 mx-2 h-4 w-4" />,
+            <div key="id" className="flex-1 min-w-0">
+              <span className="block truncate text-blue-600">
+                {area.number}.{id.number.toString().padStart(2, '0')} {id.name}
+              </span>
+            </div>
+          );
+        }
+      }
+    }
+
+    return (
+      <div className="flex items-center text-sm text-gray-600 mb-4 w-full">
+        {breadcrumbItems.length > 0 ? breadcrumbItems : <span>No selection</span>}
+      </div>
+    );
+  };
+
   return (
-    <div className="p-4 h-screen flex flex-col" key={JSON.stringify(state)}>
+    <div className="p-4 h-screen flex flex-col">
       <Tabs value={state.activeTab} onValueChange={(value) => dispatch({ type: 'SET_ACTIVE_TAB', tab: value as 'category' | 'area' | 'id' })} className="flex-grow flex flex-col">
         <TabsList>
           <TabsTrigger value="category">Category</TabsTrigger>
           <TabsTrigger value="area" disabled={state.selectedCategory === null}>Area</TabsTrigger>
           <TabsTrigger value="id" disabled={state.selectedArea === null}>ID</TabsTrigger>
         </TabsList>
+
+        {renderBreadcrumb()}
 
         <TabsContent value="category" className="flex-grow overflow-y-auto">
           {/* Render categories */}
@@ -254,7 +336,7 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
               <div className="font-bold">{category.range} {category.name}</div>
               <Input
                 value={category.name}
-                onChange={(e) => dispatch({ type: 'UPDATE_CATEGORY', index, name: e.target.value })}
+                onChange={(e) => handleInputChange('category', [index], e.target.value)}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="Enter category name"
               />
@@ -271,7 +353,7 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
               <div className="font-bold">{area.number} {area.name}</div>
               <Input
                 value={area.name}
-                onChange={(e) => dispatch({ type: 'UPDATE_AREA', categoryIndex: state.selectedCategory!, areaIndex: index, name: e.target.value })}
+                onChange={(e) => handleInputChange('area', [state.selectedCategory!, index], e.target.value)}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="Enter area name"
               />
@@ -287,7 +369,7 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
               <div className="font-bold">{state.categories[state.selectedCategory].areas[state.selectedArea].number}.{id.number.toString().padStart(2, '0')} {id.name}</div>
               <Input
                 value={id.name}
-                onChange={(e) => dispatch({ type: 'UPDATE_ID', categoryIndex: state.selectedCategory!, areaIndex: state.selectedArea!, idIndex: index, name: e.target.value })}
+                onChange={(e) => handleInputChange('id', [state.selectedCategory!, state.selectedArea!, index], e.target.value)}
                 onClick={(e) => e.stopPropagation()}
                 placeholder="Enter ID name"
               />
@@ -324,4 +406,4 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
   );
 };
 
-export default JohnnyDecimalManager;
+export default React.memo(JohnnyDecimalManager);

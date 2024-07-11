@@ -188,8 +188,8 @@ const PaperSections: React.FC = () => {
 
       {/* Selected ID display */}
       <div className="p-4 bg-gray-100">
-        <h3 className="text-lg font-semibold mb-2">Selected IDs for checked sections:</h3>
-        {sections.filter(s => s.isChecked && s.selectedIDs.length > 0).map(section => (
+        <h3 className="text-lg font-semibold mb-2">Selected IDs for sections:</h3>
+        {sections.filter(s => s.selectedIDs.length > 0).map(section => (
           <div key={section.id} className="mb-1 flex items-center">
             <span className="mr-2">{section.name}:</span>
             {section.selectedIDs.map(id => (
