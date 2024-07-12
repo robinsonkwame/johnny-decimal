@@ -52,6 +52,11 @@ const PaperSections: React.FC = () => {
     localStorage.setItem('combinedState', JSON.stringify(combinedState));
   }, [sections]);
 
+  // Log sections whenever they change
+  useEffect(() => {
+    console.log('Sections updated:', sections);
+  }, [sections]);
+
   const saveStateToFile = () => {
     const johnnyDecimalState = localStorage.getItem('johnnyDecimalState');
     const combinedState: CombinedState = {
@@ -143,9 +148,60 @@ const PaperSections: React.FC = () => {
   };
 
   const removeIDFromSection = (sectionId: number, idToRemove: string) => {
-    setSections(sections.map(section => 
+    setSections(prevSections => prevSections.map(section => 
       section.id === sectionId ? { ...section, selectedIDs: section.selectedIDs.filter(id => id !== idToRemove) } : section
     ));
+
+    // Always call handleRemoveID to ensure consistency
+    handleRemoveID(idToRemove);
+  };
+
+  const handleRemoveArea = (areaNumber: number) => {
+    setSections(sections.map(section => ({
+      ...section,
+      selectedIDs: section.selectedIDs.filter(id => !id.startsWith(areaNumber.toString()))
+    })));
+  };
+
+  const handleRemoveID = (id: string) => {
+    console.log('Removing ID:', id);  // Add this log
+
+    // Remove the ID from all sections
+    setSections(prevSections => prevSections.map(section => ({
+      ...section,
+      selectedIDs: section.selectedIDs.filter(selectedId => selectedId !== id)
+    })));
+
+    // Update the Johnny Decimal state
+    if (johnnyDecimalState) {
+      const updatedState = removeIDFromJohnnyDecimalState(johnnyDecimalState, id);
+      setJohnnyDecimalState(updatedState);
+      localStorage.setItem('johnnyDecimalState', JSON.stringify(updatedState));
+    }
+  };
+
+  const removeIDFromJohnnyDecimalState = (state: any, idToRemove: string) => {
+    const [areaNumber, idNumber] = idToRemove.split('.');
+    const categoryIndex = Math.floor(parseInt(areaNumber) / 10);
+    const areaIndex = parseInt(areaNumber) % 10 - 1;
+    const idIndex = parseInt(idNumber) - 1;
+
+    return {
+      ...state,
+      categories: state.categories.map((category: any, cIndex: number) =>
+        cIndex === categoryIndex
+          ? {
+              ...category,
+              areas: category.areas.map((area: any, aIndex: number) =>
+                aIndex === areaIndex
+                  ? { ...area, ids: area.ids.filter((_: any, iIndex: number) => iIndex !== idIndex) }
+                  : area
+              )
+            }
+          : category
+      ),
+      selectedID: state.selectedID === idIndex ? null : state.selectedID,
+    };
   };
 
   return (
@@ -182,6 +238,8 @@ const PaperSections: React.FC = () => {
             activeJohnnyDecimalID={activeJohnnyDecimalID} 
             onStateChange={handleJohnnyDecimalStateChange}
             initialState={johnnyDecimalState || null}
+            onRemoveArea={handleRemoveArea}
+            onRemoveID={handleRemoveID}
           />
         </div>
       </div>

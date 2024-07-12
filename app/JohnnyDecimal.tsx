@@ -29,7 +29,9 @@ type Action =
   | { type: 'UPDATE_ID'; categoryIndex: number; areaIndex: number; idIndex: number; name: string }
   | { type: 'RESET' }
   | { type: 'SET_ACTIVE_TAB'; tab: 'category' | 'area' | 'id' }
-  | { type: 'LOAD_STATE'; state: State };
+  | { type: 'LOAD_STATE'; state: State }
+  | { type: 'REMOVE_AREA'; categoryIndex: number; areaIndex: number }
+  | { type: 'REMOVE_ID'; categoryIndex: number; areaIndex: number; idIndex: number };
 
 const defaultState: State = {
   categories: [],
@@ -191,6 +193,38 @@ function reducer(state: State, action: Action): State {
       console.log('New state after LOAD_STATE:', newState);
       return newState;
 
+    case 'REMOVE_AREA':
+      const updatedCategories = state.categories.map((category, cIndex) =>
+        cIndex === action.categoryIndex
+          ? { ...category, areas: category.areas.filter((_, aIndex) => aIndex !== action.areaIndex) }
+          : category
+      );
+      const updatedCategory = updatedCategories[action.categoryIndex];
+      return {
+        ...state,
+        categories: updatedCategories,
+        selectedArea: updatedCategory.areas.length > 0 ? 0 : null,
+        selectedID: null,
+      };
+
+    case 'REMOVE_ID':
+      return {
+        ...state,
+        categories: state.categories.map((category, cIndex) =>
+          cIndex === action.categoryIndex
+            ? {
+                ...category,
+                areas: category.areas.map((area, aIndex) =>
+                  aIndex === action.areaIndex
+                    ? { ...area, ids: area.ids.filter((_, iIndex) => iIndex !== action.idIndex) }
+                    : area
+                )
+              }
+            : category
+        ),
+        selectedID: state.selectedID === action.idIndex ? null : state.selectedID,
+      };
+
     default:
       return state;
   }
@@ -201,9 +235,11 @@ interface JohnnyDecimalManagerProps {
   activeJohnnyDecimalID: { category: number, area: number, id: number } | null;
   onStateChange: (state: State) => void;
   initialState: State | null;
+  onRemoveArea: (areaNumber: number) => void;
+  onRemoveID: (id: string) => void;
 }
 
-const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect, activeJohnnyDecimalID, onStateChange, initialState }) => {
+const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect, activeJohnnyDecimalID, onStateChange, initialState, onRemoveArea, onRemoveID }) => {
   console.log('JohnnyDecimalManager rendered with initialState:', initialState);
 
   const [state, dispatch] = useReducer(reducer, initialState || defaultState);
@@ -288,25 +324,29 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
 
       if (state.selectedArea !== null) {
         const area = category.areas[state.selectedArea];
-        breadcrumbItems.push(
-          <ChevronRight key="chevron1" className="flex-shrink-0 mx-2 h-4 w-4" />,
-          <div key="area" className="flex-1 min-w-0">
-            <span className="block truncate text-blue-600">
-              {area.number} {area.name}
-            </span>
-          </div>
-        );
-
-        if (state.selectedID !== null) {
-          const id = area.ids[state.selectedID];
+        if (area) {  // Check if area exists
           breadcrumbItems.push(
-            <ChevronRight key="chevron2" className="flex-shrink-0 mx-2 h-4 w-4" />,
-            <div key="id" className="flex-1 min-w-0">
+            <ChevronRight key="chevron1" className="flex-shrink-0 mx-2 h-4 w-4" />,
+            <div key="area" className="flex-1 min-w-0">
               <span className="block truncate text-blue-600">
-                {area.number}.{id.number.toString().padStart(2, '0')} {id.name}
+                {area.number} {area.name}
               </span>
             </div>
           );
+
+          if (state.selectedID !== null) {
+            const id = area.ids[state.selectedID];
+            if (id) {  // Check if ID exists
+              breadcrumbItems.push(
+                <ChevronRight key="chevron2" className="flex-shrink-0 mx-2 h-4 w-4" />,
+                <div key="id" className="flex-1 min-w-0">
+                  <span className="block truncate text-blue-600">
+                    {area.number}.{id.number.toString().padStart(2, '0')} {id.name}
+                  </span>
+                </div>
+              );
+            }
+          }
         }
       }
     }
@@ -316,6 +356,23 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
         {breadcrumbItems.length > 0 ? breadcrumbItems : <span>No selection</span>}
       </div>
     );
+  };
+
+  const handleRemoveArea = (categoryIndex: number, areaIndex: number) => {
+    const category = state.categories[categoryIndex];
+    const area = category.areas[areaIndex];
+    dispatch({ type: 'REMOVE_AREA', categoryIndex, areaIndex });
+    onRemoveArea(area.number);
+  };
+
+  const handleRemoveID = (categoryIndex: number, areaIndex: number, idIndex: number) => {
+    const category = state.categories[categoryIndex];
+    const area = category.areas[areaIndex];
+    const id = area.ids[idIndex];
+    const idString = `${area.number}.${id.number.toString().padStart(2, '0')}`;
+  
+    dispatch({ type: 'REMOVE_ID', categoryIndex, areaIndex, idIndex });
+    onRemoveID(idString);
   };
 
   return (
@@ -358,6 +415,7 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
                 placeholder="Enter area name"
               />
               <Button onClick={() => dispatch({ type: 'ADD_ID', categoryIndex: state.selectedCategory!, areaIndex: index })} disabled={area.ids.length >= 99}>Add ID</Button>
+              <Button onClick={() => handleRemoveArea(state.selectedCategory!, index)} variant="destructive" size="sm">Remove Area</Button>
             </div>
           ))}
         </TabsContent>
@@ -373,6 +431,7 @@ const JohnnyDecimalManager: React.FC<JohnnyDecimalManagerProps> = ({ onIDSelect,
                 onClick={(e) => e.stopPropagation()}
                 placeholder="Enter ID name"
               />
+              <Button onClick={() => handleRemoveID(state.selectedCategory!, state.selectedArea!, index)} variant="destructive" size="sm">Remove ID</Button>
             </div>
           ))}
         </TabsContent>
